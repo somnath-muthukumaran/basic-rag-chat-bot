@@ -6,7 +6,7 @@ from db.weaviate_client import weaviate_client
 from utils.text_processing import chunk_document
 import asyncio
 import uuid
-import PyPDF2
+from pypdf import PdfReader
 
 router = APIRouter()
 
@@ -67,9 +67,9 @@ async def upload_document(
         content = await file.read()
         # Detect file type by extension
         if file.filename.lower().endswith('.pdf'):
-            # Use PyPDF2 to extract text from PDF
+            # Use pypdf to extract text from PDF
             from io import BytesIO
-            pdf_reader = PyPDF2.PdfReader(BytesIO(content))
+            pdf_reader = PdfReader(BytesIO(content))
             text = ""
             for page in pdf_reader.pages:
                 text += page.extract_text() or ""

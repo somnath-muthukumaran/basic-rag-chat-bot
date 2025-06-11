@@ -3,7 +3,7 @@ uvicorn
 python-dotenv
 httpx
 numpy
-PyPDF2
+pypdf
 weaviate-client
 python-multipart
 nltk
