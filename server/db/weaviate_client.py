@@ -174,12 +174,14 @@ class WeaviateClient:
         """Search for similar documents using the query embedding, optionally filtered by document_id."""
         try:
             collection = self.client.collections.get("NovelChunk")
+            
             if document_id:
+                # Use the correct Weaviate v4 syntax: use filters parameter in near_vector
                 response = collection.query.near_vector(
                     near_vector=query_embedding,
                     limit=limit,
                     return_metadata=["distance"],
-                    where=collection.query.Filter.by_property("document_id").equal(document_id)
+                    filters=wvc.query.Filter.by_property("document_id").equal(document_id)
                 )
             else:
                 response = collection.query.near_vector(
@@ -187,8 +189,11 @@ class WeaviateClient:
                     limit=limit,
                     return_metadata=["distance"]
                 )
+                
             return response.objects if hasattr(response, 'objects') else []
         except Exception as e:
+            print(f"Error in search_similar: {type(e).__name__} - {e}")
+            traceback.print_exc()
             raise HTTPException(status_code=500, detail=f"Failed to search documents: {str(e)}")
 
     async def list_documents(self) -> List[Dict[str, Any]]:
@@ -238,9 +243,9 @@ class WeaviateClient:
         try:
             if self.client.collections.exists("NovelChunk"):
                 collection = self.client.collections.get("NovelChunk")
-                # Delete all chunks for this document
+                # Delete all chunks for this document using correct Weaviate v4 syntax
                 collection.data.delete_many(
-                    collection.query.Filter.by_property("document_id").equal(document_id)
+                    where=wvc.query.Filter.by_property("document_id").equal(document_id)
                 )
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")

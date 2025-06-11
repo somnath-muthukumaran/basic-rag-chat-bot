@@ -39,17 +39,30 @@ const MessageList: React.FC<MessageListProps> = ({ messages, className = '' }) =
             >
               <p className="whitespace-pre-wrap leading-relaxed">
                 {message.content}
+                {message.isStreaming && (
+                  <>
+                    {message.content.includes('🤔 Thinking...') ? (
+                      <span className="inline-flex items-center ml-2">
+                        <span className="w-2 h-2 bg-verdant-400 rounded-full animate-pulse mr-1"></span>
+                        <span className="w-2 h-2 bg-verdant-400 rounded-full animate-pulse mr-1" style={{animationDelay: '0.2s'}}></span>
+                        <span className="w-2 h-2 bg-verdant-400 rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></span>
+                      </span>
+                    ) : (
+                      <span className="inline-block w-2 h-5 bg-verdant-400 ml-1 typing-cursor" />
+                    )}
+                  </>
+                )}
               </p>
             </div>
             
             {/* References */}
-            {message.references && message.references.length > 0 && (
+            {message.references && message.references.length > 0 && false && (
               <div className="mt-4 space-y-3">
                 <div className="flex items-center space-x-2">
                   <Sparkles className="h-4 w-4 text-verdant-400" />
                   <p className="text-sm font-medium text-verdant-300">Sources:</p>
                 </div>
-                {message.references.map((ref, index) => (
+                {message?.references?.map((ref, index) => (
                   <div
                     key={index}
                     className="glass-light border border-verdant-500/20 rounded-xl p-4 text-sm transition-all duration-300 hover:border-verdant-500/30"

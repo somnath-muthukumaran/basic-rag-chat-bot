@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles } from 'lucide-react';
 import { ApiService } from '../utils/api';
+import { processThinkingText } from '../utils/textFilters';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
 import type { Message, QueryResponse } from '../types';
@@ -50,9 +51,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
       let fullAnswer = '';
       let references: any[] = [];
+      let hasStartedStreaming = false;
 
       for await (const chunk of ApiService.queryStream(content, selectedDocumentId)) {
-        fullAnswer = chunk.answer;
+        if (!hasStartedStreaming) {
+          hasStartedStreaming = true;
+        }
+        
+        // Process thinking tags and get appropriate display content
+        const processed = processThinkingText(chunk.answer);
+        fullAnswer = processed.displayText;
+        
         if (chunk.references) {
           references = chunk.references;
         }
@@ -63,14 +72,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 ...msg,
                 content: fullAnswer,
                 references: chunk.done ? references : undefined,
-                isStreaming: !chunk.done,
+                isStreaming: !chunk.done || processed.isThinking,
               }
             : msg
         ));
 
-        if (chunk.done) {
+        if (chunk.done && !processed.isThinking) {
           break;
         }
+        
+        // Add a small delay to make streaming more visible
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
     } catch (error) {
       console.error('Error sending message:', error);

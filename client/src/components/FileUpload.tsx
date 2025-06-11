@@ -3,6 +3,7 @@ import { Upload, File, X, CheckCircle, AlertCircle, UploadCloud as CloudUpload }
 import { ApiService } from '../utils/api';
 
 interface FileUploadProps {
+  onUploadStart?: () => void;
   onUploadComplete: () => void;
   className?: string;
 }
@@ -14,7 +15,11 @@ interface UploadState {
   error: string | null;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete, className = '' }) => {
+const FileUpload: React.FC<FileUploadProps> = ({ 
+  onUploadStart, 
+  onUploadComplete, 
+  className = '' 
+}) => {
   const [uploadState, setUploadState] = useState<UploadState>({
     file: null,
     uploading: false,
@@ -62,6 +67,9 @@ const FileUpload: React.FC<FileUploadProps> = ({ onUploadComplete, className = '
     if (!uploadState.file) return;
 
     setUploadState(prev => ({ ...prev, uploading: true, error: null }));
+    
+    // Notify parent that upload has started
+    onUploadStart?.();
 
     try {
       await ApiService.uploadDocument(uploadState.file);

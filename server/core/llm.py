@@ -5,6 +5,7 @@ import json
 import os
 from dotenv import load_dotenv
 import asyncio
+from langchain_core.documents import Document
 
 # Load environment variables from .env file
 load_dotenv()
@@ -80,7 +81,7 @@ async def generate_streaming_response(prompt: str, tools: List[Dict[str, Any]] =
             current_answer = ""
             try:
                 async for chunk in response.aiter_lines():
-                    print(f"Received chunk: {chunk}")
+                    # print(f"Received chunk: {chunk}")
                     if chunk:
                         try:
                             data = json.loads(chunk)
@@ -110,3 +111,56 @@ async def generate_streaming_response(prompt: str, tools: List[Dict[str, Any]] =
         except Exception as e:
             print(f"Unexpected error in generate_streaming_response: {e}")
             raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+class OllamaCompressor:
+    """Custom compressor using Ollama for contextual compression."""
+    
+    def __init__(self, model_name: str = None):
+        self.model_name = model_name or OLLAMA_CHAT_MODEL
+        self.ollama_base_url = OLLAMA_BASE_URL
+        
+    def compress_documents(self, documents: List[Document], query: str) -> List[Document]:
+        """Compress documents based on query relevance using Ollama."""
+        # For now, we'll implement a simple relevance-based filtering
+        # In a full implementation, you'd use the LLM to extract relevant parts
+        
+        # Simple keyword-based relevance (can be enhanced with actual LLM compression)
+        query_words = set(query.lower().split())
+        compressed_docs = []
+        
+        for doc in documents:
+            doc_words = set(doc.page_content.lower().split())
+            relevance_score = len(query_words.intersection(doc_words)) / len(query_words) if query_words else 0
+            
+            # Keep documents with at least 10% keyword overlap
+            if relevance_score > 0.1:
+                # Truncate very long documents while preserving important parts
+                content = doc.page_content
+                if len(content) > 800:
+                    # Try to find the most relevant sentences
+                    sentences = content.split('. ')
+                    relevant_sentences = []
+                    for sentence in sentences:
+                        sentence_words = set(sentence.lower().split())
+                        if query_words.intersection(sentence_words):
+                            relevant_sentences.append(sentence)
+                    
+                    if relevant_sentences:
+                        content = '. '.join(relevant_sentences[:3])  # Top 3 relevant sentences
+                    else:
+                        content = content[:800]  # Fallback to truncation
+                
+                compressed_doc = Document(
+                    page_content=content,
+                    metadata={**doc.metadata, 'relevance_score': relevance_score}
+                )
+                compressed_docs.append(compressed_doc)
+        
+        return compressed_docs
+
+async def compress_documents_with_llm(documents: List[Document], query: str) -> List[Document]:
+    """Advanced compression using LLM to extract only relevant parts."""
+    # TODO: Implement actual LLM-based compression
+    # This would send the documents and query to Ollama to extract only relevant excerpts
+    compressor = OllamaCompressor()
+    return compressor.compress_documents(documents, query)

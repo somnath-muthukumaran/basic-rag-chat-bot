@@ -1,4 +1,4 @@
-import { HealthStatus, ProcessingStatus, QueryResponse } from "../types";
+import { HealthStatus, ProcessingStatus, QueryResponse, Document as AppDocument } from "../types";
 
 const API_BASE = 'http://localhost:8000'; // Update this to your actual API base URL
 
@@ -43,7 +43,7 @@ export class ApiService {
     return response.json();
   }
 
-  static async getDocuments(): Promise<Document[]> {
+  static async getDocuments(): Promise<AppDocument[]> {
     try {
       const response = await fetch(`${API_BASE}/documents`);
       if (!response.ok) {

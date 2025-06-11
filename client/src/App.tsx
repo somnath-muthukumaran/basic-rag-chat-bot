@@ -1,19 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { Brain, Upload, Zap, Activity } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Brain, Upload } from 'lucide-react';
 import ChatInterface from './components/ChatInterface';
 import DocumentSidebar from './components/DocumentSidebar';
 import FileUpload from './components/FileUpload';
 import StatusIndicator from './components/StatusIndicator';
 import { ApiService } from './utils/api';
-import type { Document, HealthStatus, ProcessingStatus } from './types';
+import type { Document as AppDocument, HealthStatus, ProcessingStatus } from './types';
 
 function App() {
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documents, setDocuments] = useState<AppDocument[]>([]);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | undefined>();
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [processing, setProcessing] = useState<ProcessingStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Fetch health status
   const fetchHealth = async () => {
@@ -52,8 +53,12 @@ function App() {
     } catch (error) {
       console.error('Failed to fetch processing status:', error);
       setProcessing({
-        is_processing: false,
+        status: 'error',
+        progress: 0,
+        total_chunks: 0,
+        processed_chunks: 0,
         current_document: null,
+        is_processing: false,
         queue_size: 0,
         message: 'Backend server is not available'
       });
@@ -76,8 +81,14 @@ function App() {
     }
   };
 
+  // Handle upload start
+  const handleUploadStart = () => {
+    setIsUploading(true);
+  };
+
   // Handle upload completion
   const handleUploadComplete = () => {
+    setIsUploading(false);
     fetchDocuments();
     setShowUpload(false);
   };
@@ -88,15 +99,36 @@ function App() {
     fetchDocuments();
     fetchProcessingStatus();
 
-    // Set up polling for health and processing status
+    // Set up polling for health status only
     const healthInterval = setInterval(fetchHealth, 30000); // Every 30 seconds
-    const processingInterval = setInterval(fetchProcessingStatus, 2000); // Every 2 seconds
 
     return () => {
       clearInterval(healthInterval);
-      clearInterval(processingInterval);
     };
   }, []);
+
+  // Smart polling for processing status only during uploads
+  useEffect(() => {
+    let processingInterval: number | null = null;
+
+    if (isUploading) {
+      // Poll processing status every 2 seconds during upload
+      processingInterval = window.setInterval(() => {
+        fetchProcessingStatus().then(() => {
+          // Check if processing is complete
+          if (processing && !processing.is_processing && processing.status !== 'processing') {
+            setIsUploading(false);
+          }
+        });
+      }, 2000);
+    }
+
+    return () => {
+      if (processingInterval) {
+        clearInterval(processingInterval);
+      }
+    };
+  }, [isUploading, processing]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -153,6 +185,7 @@ function App() {
             {showUpload && (
               <div className="transform transition-all duration-500 ease-out">
                 <FileUpload
+                  onUploadStart={handleUploadStart}
                   onUploadComplete={handleUploadComplete}
                   className="lg:sticky lg:top-0"
                 />

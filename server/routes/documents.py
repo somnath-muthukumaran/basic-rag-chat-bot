@@ -86,7 +86,7 @@ async def upload_document(
             "current_document": file.filename
         })
         
-        # Create chunks using the new chunking strategy
+        # Create chunks using LangChain's improved chunking strategy
         chunks = chunk_document(text, chunk_size, chunk_overlap)
         
         # Process chunks in the background

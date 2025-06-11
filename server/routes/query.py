@@ -1,9 +1,12 @@
 from fastapi import APIRouter, HTTPException
+from typing import List
 from models.api_models import QueryRequest, StreamingResponse
-from core.llm import generate_streaming_response, get_embedding
+from core.llm import generate_streaming_response, get_embedding, compress_documents_with_llm
+from core.weaviate import WeaviateRetriever
 from db.weaviate_client import weaviate_client
 from prompts.templates import generate_rag_prompt
 from utils.streaming import StreamingJSONResponse
+from langchain_core.documents import Document
 import json
 
 router = APIRouter()
@@ -15,6 +18,7 @@ class Reference:
         self.end_line = end_line
         self.content = content
         self.similarity_score = similarity_score
+        
     def dict(self):
         return {
             'page': self.page,
@@ -24,45 +28,42 @@ class Reference:
             'similarity_score': self.similarity_score
         }
 
-def extract_context_and_references(objects):
+def extract_context_and_references(documents: List[Document]):
+    """Extract context and references from LangChain documents."""
     context_chunks = []
     references = []
-    for i, obj in enumerate(objects):
-        try:
-            if not hasattr(obj, 'properties'):
-                continue
-
-            props = obj.properties
-            content = props.get("content", "")
-            if content:
-                context_chunks.append(str(content))
-
-            distance = 0
-            if hasattr(obj, 'metadata') and obj.metadata and hasattr(obj.metadata, 'distance'):
-                distance = obj.metadata.distance or 0
-
-            similarity_score = 1 - distance if distance is not None else 0
-
+    
+    for doc in documents:
+        content = doc.page_content
+        metadata = doc.metadata
+        
+        if content:
+            context_chunks.append(str(content))
+            
             references.append(Reference(
-                page=props.get("page", 0),
-                start_line=props.get("start_line", 0),
-                end_line=props.get("end_line", 0),
-                content=str(content) if content else "",
-                similarity_score=round(similarity_score, 3)
+                page=metadata.get("page", 0),
+                start_line=metadata.get("start_line", 0),
+                end_line=metadata.get("end_line", 0),
+                content=str(content),
+                similarity_score=metadata.get("similarity_score", 0)
             ))
-        except Exception:
-            continue
+    
     return context_chunks, references
 
 @router.post("/query")
 async def query_novel(query: QueryRequest):
-    """Query the novel with streaming response"""
+    """Query the novel with streaming response using contextual compression"""
     try:
-        # Generate embedding for the question
-        question_embedding = await get_embedding(query.question)
-        # Use the reusable search_similar method
-        objects = await weaviate_client.search_similar(question_embedding, document_id=getattr(query, 'document_id', None))
-        if not objects:
+        # Initialize the Weaviate retriever
+        retriever = WeaviateRetriever(weaviate_client, k=10)  # Get more documents initially
+        
+        # Get relevant documents
+        documents = await retriever.get_relevant_documents(
+            query.question, 
+            document_id=getattr(query, 'document_id', None)
+        )
+        
+        if not documents:
             async def empty_response():
                 yield {
                     "answer": "No relevant information found in the uploaded documents.",
@@ -70,10 +71,11 @@ async def query_novel(query: QueryRequest):
                     "done": True
                 }
             return StreamingJSONResponse(empty_response())
-        # Use the helper function for context and references
-        context_chunks, references = extract_context_and_references(objects)
-        valid_chunks = [str(chunk).strip() for chunk in context_chunks if chunk and str(chunk).strip()]
-        if not valid_chunks:
+        
+        # Apply contextual compression to get the most relevant parts
+        compressed_documents = await compress_documents_with_llm(documents, query.question)
+        
+        if not compressed_documents:
             async def empty_response():
                 yield {
                     "answer": "No relevant information found in the uploaded documents.",
@@ -81,8 +83,13 @@ async def query_novel(query: QueryRequest):
                     "done": True
                 }
             return StreamingJSONResponse(empty_response())
+        
+        # Extract context and references from compressed documents
+        context_chunks, references = extract_context_and_references(compressed_documents)
+        
         # Generate answer using Ollama
-        prompt = generate_rag_prompt(valid_chunks, query.question)
+        prompt = generate_rag_prompt(query.question, context_chunks)
+        
         async def generate_combined_response():
             try:
                 async for chunk in generate_streaming_response(prompt):
@@ -102,20 +109,35 @@ async def query_novel(query: QueryRequest):
                                         'content': getattr(ref, 'content', ''),
                                         'similarity_score': getattr(ref, 'similarity_score', 0)
                                     })
-                            chunk["references"] = references_list
-                            print(f"Added {len(references_list)} references to response")
+                            
+                            yield {
+                                "answer": chunk.get("answer", ""),
+                                "references": references_list,
+                                "done": True
+                            }
                         except Exception as ref_error:
                             print(f"Error processing references: {ref_error}")
-                            chunk["references"] = []
-                    yield chunk
+                            yield {
+                                "answer": chunk.get("answer", ""),
+                                "references": [],
+                                "done": True
+                            }
+                    else:
+                        yield {
+                            "answer": chunk.get("answer", ""),
+                            "references": [],
+                            "done": False
+                        }
             except Exception as gen_error:
                 print(f"Error in generate_combined_response: {gen_error}")
                 yield {
-                    "answer": f"Error generating response: {str(gen_error)}",
+                    "answer": f"Sorry, I encountered an error while generating the response: {str(gen_error)}",
                     "references": [],
                     "done": True
                 }
+        
         return StreamingJSONResponse(generate_combined_response())
+        
     except Exception as e:
-        print(f"Exception in query_novel: {e}")
+        print(f"Error in query_novel: {e}")
         raise HTTPException(status_code=500, detail=str(e))
