@@ -7,3 +7,6 @@ pypdf
 weaviate-client
 python-multipart
 nltk
+langchain
+langchain-community
+langchain-text-splitters

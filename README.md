@@ -2,9 +2,32 @@
 
 This document provides an overview of the available API endpoints for the NovelChatBot server.
 
+## Features
+
+- **Advanced Text Chunking**: Uses LangChain's `RecursiveCharacterTextSplitter` for intelligent document segmentation with larger chunks (1000 chars) and better overlap (200 chars)
+- **Contextual Compression**: Implements contextual compression to extract only the most relevant parts of retrieved documents
+- **Streaming Responses**: Real-time streaming of chat responses
+- **Multiple File Formats**: Supports PDF and TXT file uploads
+- **Vector Search**: Uses Weaviate for semantic similarity search with embeddings from Ollama
+
 ## Base URL
 
 All API endpoints are relative to the server's base URL.
+
+## Environment Configuration
+
+Copy `.env.example` to `.env` and configure:
+
+```env
+# Ollama Configuration
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_EMBED_MODEL=nomic-embed-text:v1.5
+OLLAMA_CHAT_MODEL=qwen3:4b
+
+# Weaviate Configuration
+WEAVIATE_URL=your_weaviate_cloud_url
+WEAVIATE_API_KEY=your_weaviate_api_key
+```
 
 ## Authentication
 

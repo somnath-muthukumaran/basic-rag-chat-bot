@@ -1,0 +1,81 @@
+flowchart TD
+    %% User Interaction Layer
+    User([👤 User]) --> Upload[📄 Upload Novel]
+    User --> Query[💬 Ask Question]
+    
+    %% Frontend Layer
+    Upload --> VueApp[🖥️ Vue.js Frontend]
+    Query --> VueApp
+    VueApp --> API[🔌 FastAPI Backend]
+    
+    %% Backend Processing
+    API --> UploadEndpoint[📤 /upload Endpoint]
+    API --> QueryEndpoint[❓ /query Endpoint]
+    
+    %% Document Processing Flow
+    UploadEndpoint --> FileProcessor[📝 File Processing]
+    FileProcessor --> PDFExtract{📄 PDF?}
+    PDFExtract -->|Yes| PyPDF[pypdf Extraction]
+    PDFExtract -->|No| TxtRead[Text Reading]
+    PyPDF --> TextPreprocess[🧹 Text Preprocessing]
+    TxtRead --> TextPreprocess
+    
+    %% Advanced Chunking with LangChain
+    TextPreprocess --> LangChainChunker[🔪 LangChain Chunker]
+    LangChainChunker --> RecursiveSplitter[📊 RecursiveCharacterTextSplitter]
+    RecursiveSplitter --> SmartChunks[📚 Smart Chunks<br/>Size: 1000 chars<br/>Overlap: 200 chars]
+    
+    %% Embedding Generation
+    SmartChunks --> BatchProcess[⚡ Batch Processing]
+    BatchProcess --> OllamaEmbed[🤖 Ollama Embeddings<br/>nomic-embed-text:v1.5]
+    OllamaEmbed --> Vectors[🔢 Vector Embeddings]
+    
+    %% Vector Storage
+    Vectors --> WeaviateStore[🗄️ Weaviate Storage]
+    WeaviateStore --> VectorDB[(🔍 Vector Database<br/>NovelChunk Collection)]
+    
+    %% Query Processing Flow
+    QueryEndpoint --> QueryEmbed[🔍 Query Embedding]
+    QueryEmbed --> OllamaEmbed
+    OllamaEmbed --> SimilaritySearch[📊 Similarity Search]
+    SimilaritySearch --> VectorDB
+    VectorDB --> RetrievedDocs[📄 Retrieved Documents]
+    
+    %% Contextual Compression
+    RetrievedDocs --> WeaviateRetriever[🔄 Weaviate Retriever]
+    WeaviateRetriever --> OllamaCompressor[🗜️ Ollama Compressor]
+    OllamaCompressor --> CompressedDocs[📝 Compressed Context]
+    
+    %% Response Generation
+    CompressedDocs --> PromptTemplate[📋 RAG Prompt Template]
+    PromptTemplate --> OllamaChat[🤖 Ollama Chat<br/>qwen3:4b]
+    OllamaChat --> StreamResponse[📡 Streaming Response]
+    StreamResponse --> VueApp
+    
+    %% Status Monitoring
+    UploadEndpoint --> StatusUpdate[📊 Processing Status]
+    StatusUpdate --> StatusDB[(📈 Status Storage)]
+    VueApp --> StatusCheck[🔄 Status Polling]
+    StatusCheck --> StatusDB
+    
+    %% Background Processing
+    BatchProcess -.->|Background| ProcessingQueue[⏳ Background Queue]
+    ProcessingQueue -.-> StatusUpdate
+    
+    %% Configuration
+    Config[⚙️ Environment Config] -.-> OllamaEmbed
+    Config -.-> OllamaChat
+    Config -.-> WeaviateStore
+    
+    %% Styling
+    classDef frontend fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef backend fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef ai fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef storage fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef processing fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    
+    class User,VueApp frontend
+    class API,UploadEndpoint,QueryEndpoint,FileProcessor,TextPreprocess backend
+    class OllamaEmbed,OllamaChat,OllamaCompressor,LangChainChunker ai
+    class VectorDB,WeaviateStore,StatusDB storage
+    class BatchProcess,ProcessingQueue,StatusUpdate processing
